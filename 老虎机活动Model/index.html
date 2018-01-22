@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<title></title>
+		<style>
+			* {
+				margin: 0;
+			}
+			
+			#game {
+				/*display: flex;
+				flex-direction: row;
+				flex-wrap: wrap;*/
+			}
+			
+			.item {
+				margin: 5px;
+				width: 228px;
+				height: 100px;
+				/*display: inline-block;*/
+				position: absolute;
+				border:1px solid #333333;
+			}
+			
+			.item.close {
+				background: #cccccc;
+			}
+			
+			.item.select {
+				background: red;
+				color: #ffffff;
+			}
+			.contarner{
+				width: 1200px;
+				margin: 0 auto;
+				position: relative;
+				height: 658px;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div class="contarner">
+			<div id="game"></div>
+		</div>
+		<a id="button">开始</a>
+		<a id="button2">停止</a>
+		<script>
+			(function() {
+				// 装载数据
+				var doms = {}, // 所有的 dom
+					container = document.getElementById("game"),
+					btn = document.getElementById('button'),
+					btn2 = document.getElementById('button2');
+
+				var data = [{ name: 'IPhone X', active: 0 }, { name: 'IPad Mini4', active: 1 }, { name: '红包1888元', active: 0 },
+					{ name: '红包888元', active: 1 }, { name: '红包588元', active: 0 }, { name: '存送100%', active: 0 },{ name: '返水0.5%', active: 0 },
+					{ name: '红包288元', active: 1 }, { name: '返水0.3%', active: 0 }, { name: '存送50%', active: 0 }, { name: '红包188元', active: 0 },
+					{ name: '红包88元', active: 0 }, { name: '存送20%', active: 0 }, { name: '红包58元', active: 0 },{ name: '返水0.2%', active: 0 }, 
+					{ name: '红包28元', active: 0 }, { name: '红包18元', active: 0 }, { name: '红包8元', active: 0 }];
+
+				// 老虎机单例
+				function OneTerm(obj) {
+					var name = obj.name, // 当前对象名字
+					 	dom = null, // 缓存的dom节点
+					 	active = obj.active, // 是否已经处于关闭
+						state = false; // 当前是否选中状态
+
+					var init = function() {
+						var div = document.createElement('div');
+						div.className = active ? 'item close' : 'item';
+						div.innerHTML = name;
+						dom = container.appendChild(div);
+					}
+					init(); // 初始化 dom 
+
+					return {
+						dom:dom,
+						state: state,
+						name: name,
+						active: active,
+						select: function() {
+							var len = dom.className.indexOf('select');
+							if(len === -1 && this.active !== 1) {
+								dom.className += ' select';
+								state = true;
+							}
+						},
+						notSelect: function() {
+							var str = dom.className,
+								len = str.indexOf('select');
+
+							if(active === 1) { // 如果包含 close 类 则处于关闭状态
+								return;
+							}
+							if(len !== -1) { // 如果存在 select 则处于选中状态
+								state = false;
+								dom.className = str.slice(0, len - 1)
+							}
+						},
+						close: function() {
+							var len = dom.className.indexOf('close');
+
+							if(len !== -1) { // 已经处于关闭状态
+								return;
+							}
+
+							this.notSelect();
+							dom.className += ' close';
+						}
+					}
+				}
+
+				var controller = (function() { // 老虎机控制器
+
+					var times = null, // 定时器
+						state = true, // 当前状态
+						i = 0,
+						speed = parseInt(Math.random()*160),	// 速度
+						award = '',		// 最终奖品
+						ing = false,	// 是否正在运行中
+						closeAward = null; 	// 需要关闭的奖品
+
+					var activeData = (function() { // 需要循环的数据;
+						var arr = [],
+							soltArr = [];
+						for(var i = 0, item; item = data[i++];) {
+							var fn = OneTerm(item);
+							if(fn.active === 0) {
+								arr.push(fn);
+							}
+							soltArr.push(fn)
+						}	
+						
+						// 页面样式初始化 
+						sortView(soltArr);
+						
+						return arr;
+					})();
+					
+
+					return {
+						step: function() { // 定时控制器执行函数
+							i++;
+							if(i > 0) {
+								activeData[i - 1].notSelect();
+							}
+
+							if(i === activeData.length) {
+								i = 0;
+							}
+
+							activeData[i].select();
+														
+							if(!state){	// 开始减速了	
+								
+								if(!award){	// 如果没有设置最终奖品 则直接停止  并报错
+									state = true;	// 初始化状态
+									speed = 80;	// 重置速度
+									return false;
+								}
+								
+								//减速公式
+								speed = speed + 5 * speed/80;	
+								
+								if(speed > 300 && activeData[i].name === award){	// 停止条件
+									closeAward = activeData[i];	//设置关闭奖品
+									state = true;	// 初始化状态
+									speed = 80;	// 重置速度
+									
+									// 剥离中奖数据
+									var self = this;
+									setTimeout(function(){
+										self.resetData(); 
+									},1000)
+									
+									
+									return false;
+								}								
+							}else{
+								return true;
+							}
+							
+						},
+						startPlay: function(){	// 老虎机渲染
+							var self = this;
+							ing = true;							
+							times = setTimeout(function() {
+								if(self.step() === false) {
+									clearTimeout(times);
+									times = null;	
+									return ing = false;	// 初始化老虎机状态
+								}
+								self.startPlay();
+							}, speed)
+						},						
+						start: function() {	// 开始控制器
+							if(!ing){	// 如果当前老虎机正在运行则退出
+								i = 0;
+								this.startPlay();
+							}
+						},						
+						stop: function(str){	// 停止老虎机
+							award = str;	// 设置最终奖品
+							state = false;
+						},
+						resetData: function(){	// 从奖池中移除中奖的奖品
+							var choseItem = null;
+							for(var i = 0; i < activeData.length; i++){
+								if(activeData[i] === closeAward){
+									choseItem = activeData.splice(i,1) 
+									choseItem[0].close();
+								}
+							}	
+							return choseItem || null;
+						}
+					}
+				})();
+				
+				// 页面排序
+				function sortView(data){
+					for(var i = 0; i < data.length;i++){
+						if(i < 5){
+							data[i].dom.style.left = 240 * i + 'px';
+							data[i].dom.style.top = 0;
+						}else if( i < 10){
+							data[i].dom.style.left = 240 * 4 + 'px';
+							data[i].dom.style.top = 110 * (i - 4) + 'px';
+						}else if( i < 14){
+							data[i].dom.style.top = 110 *  5 + 'px';
+							data[i].dom.style.right = 240 * (i-9) + 'px';
+						}else{
+							data[i].dom.style.right = 240 * 4 + 'px';
+							data[i].dom.style.bottom = 110 *  (i-13) + 'px';
+						}
+					}
+					data = null;
+				}
+
+				
+				document.getElementById("button").onclick = function(){
+					controller.start();
+				}
+				document.getElementById("button2").onclick = function(){
+					controller.stop('IPhone X');
+					
+				}
+				
+				window.controller = controller;
+
+			})()
+		</script>
+	</body>
+
+</html>
